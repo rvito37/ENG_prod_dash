@@ -24,21 +24,63 @@ app.MapGet("/api/data/pline", (AdsService ads) =>
     }
 });
 
+app.MapGet("/api/data/btype/{plineId}", (string plineId, AdsService ads) =>
+{
+    try
+    {
+        var entries = ads.GetBtypeEntries(plineId);
+        return Results.Ok(entries);
+    }
+    catch
+    {
+        return Results.Problem("Failed to load data", statusCode: 500);
+    }
+});
+
+app.MapGet("/api/data/esnxx/{esnxxId}", (string esnxxId, AdsService ads) =>
+{
+    try
+    {
+        var entries = ads.GetEsnxxEntries(esnxxId);
+        return Results.Ok(entries);
+    }
+    catch
+    {
+        return Results.Problem("Failed to load data", statusCode: 500);
+    }
+});
+
+try { Console.Clear(); } catch { }
 var adsService = app.Services.GetRequiredService<AdsService>();
 if (adsService.TestConnection())
-    Console.WriteLine("ADS connection OK");
+    Console.WriteLine("Dashboard is ready. Browser will open automatically.");
 else
-    Console.WriteLine("WARNING: ADS connection failed. Check DataPath in appsettings.json");
+    Console.WriteLine("Connection error. Please check configuration.");
 
-Console.WriteLine("Dashboard: http://127.0.0.1:5050");
+Console.WriteLine("Press Ctrl+C to stop.");
 
 try
 {
-    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+    // Try Chrome in app mode with small window on the left
+    var chromePaths = new[]
     {
-        FileName = "http://127.0.0.1:5050",
-        UseShellExecute = true
-    });
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe")
+    };
+    var chrome = chromePaths.FirstOrDefault(File.Exists);
+    if (chrome != null)
+    {
+        System.Diagnostics.Process.Start(chrome, "--app=http://127.0.0.1:5050 --window-size=520,700 --window-position=50,50");
+    }
+    else
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "http://127.0.0.1:5050",
+            UseShellExecute = true
+        });
+    }
 }
 catch { }
 

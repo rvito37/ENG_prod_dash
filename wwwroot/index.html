@@ -62,10 +62,15 @@
 
     <div class="content-area">
         <div id="alertBox" class="d-none"></div>
-        <div id="infoArea"></div>
+        <div style="display:flex;gap:1rem;align-items:flex-start;">
+            <div id="infoArea" style="flex:0 0 auto;"></div>
+            <div id="esnxxPanel" style="flex:0 0 auto;"></div>
+        </div>
     </div>
 
     <script>
+        let linesData = {};
+
         async function loadLines() {
             const btn = document.getElementById('btnLoad');
             const sel = document.getElementById('plineSelect');
@@ -82,13 +87,33 @@
 
                 const idIdx = data.columns.indexOf('PLINE_ID');
                 const nmIdx = data.columns.indexOf('PLINE_NM');
+                const ptIdx = data.columns.indexOf('PTYPE_ID');
+                const szIdx = data.columns.indexOf('SIZE_ID');
+                const picIdx = data.columns.indexOf('PLINE_PIC');
+                const hvIdx = data.columns.indexOf('HVAL_DT');
+                const lvIdx = data.columns.indexOf('LVAL_DT');
 
+                const sorted = [...data.rows].sort((a, b) => {
+                    const pa = (a[ptIdx] || '').toString();
+                    const pb = (b[ptIdx] || '').toString();
+                    if (pa !== pb) return pa.localeCompare(pb);
+                    return (a[idIdx] || '').toString().localeCompare((b[idIdx] || '').toString());
+                });
+
+                linesData = {};
                 sel.innerHTML = '<option value="" disabled selected>-- Select Production Line --</option>';
-                data.rows.forEach(row => {
+                sorted.forEach(row => {
+                    const id = row[idIdx];
                     const opt = document.createElement('option');
-                    opt.value = row[idIdx];
-                    opt.textContent = row[idIdx] + ' \u2014 ' + (row[nmIdx] || '');
+                    const sz = (row[szIdx] || '').toString().trim();
+                    opt.value = id;
+                    opt.textContent = row[ptIdx] + ' | ' + id + ' \u2014 ' + (row[nmIdx] || '') + (sz ? ' [' + sz + ']' : '');
                     sel.appendChild(opt);
+                    linesData[id] = {
+                        pic: (row[picIdx] || '').toString().trim(),
+                        hval: row[hvIdx] ?? 0,
+                        lval: row[lvIdx] ?? 0
+                    };
                 });
             } catch {
                 alertBox.innerHTML = '<div class="alert alert-danger mb-0">Failed to load data.</div>';
@@ -99,12 +124,101 @@
             }
         }
 
-        document.getElementById('plineSelect').addEventListener('change', function() {
+        function fmtVal(v) {
+            if (v === null || v === undefined) return '0.000';
+            const n = parseFloat(v);
+            return isNaN(n) ? String(v) : n.toFixed(3);
+        }
+
+        document.getElementById('plineSelect').addEventListener('change', async function() {
             const id = this.value;
-            const text = this.options[this.selectedIndex].textContent;
+            const d = linesData[id] || {};
+
+            document.getElementById('esnxxPanel').innerHTML = '';
             document.getElementById('infoArea').innerHTML =
-                '<div class="card"><div class="card-body p-3 placeholder-msg">Selected: <strong>' + text + '</strong></div></div>';
+                '<div class="card">' +
+                '  <div class="card-body p-3">' +
+                '    <div class="mb-2" style="font-size:.85rem;">' +
+                '      <span style="color:#888;">Default DT Range:</span> ' +
+                '      <strong>' + fmtVal(d.hval) + '</strong> &mdash; <strong>' + fmtVal(d.lval) + '</strong>' +
+                '    </div>' +
+                '    <div class="mb-3" style="font-size:.85rem;">' +
+                '      <span style="color:#888;">Format:</span> ' +
+                '      <strong style="font-family:monospace;letter-spacing:1px;">' + (d.pic || '') + '</strong>' +
+                '    </div>' +
+                '    <div id="btypeArea"><div style="color:#aaa;font-size:.85rem;">Loading...</div></div>' +
+                '  </div>' +
+                '</div>';
+
+            try {
+                const resp = await fetch('/api/data/btype/' + encodeURIComponent(id));
+                if (!resp.ok) throw new Error();
+                const entries = await resp.json();
+                const area = document.getElementById('btypeArea');
+                if (area) {
+                    if (entries.length === 0) {
+                        area.innerHTML = '<div style="color:#aaa;font-size:.85rem;">\u2014</div>';
+                    } else {
+                        let html = '<div style="max-height:280px;overflow-y:auto;border:1px solid #e9ecef;border-radius:6px;max-width:420px;">';
+                        html += '<table style="width:100%;font-size:.82rem;border-collapse:collapse;">';
+                        html += '<thead><tr style="background:#f8f9fa;position:sticky;top:0;">';
+                        html += '<th style="padding:5px 10px;border-bottom:1px solid #dee2e6;color:#555;">B_TYPE</th>';
+                        html += '<th style="padding:5px 10px;border-bottom:1px solid #dee2e6;color:#555;">ESNXX</th>';
+                        html += '<th style="padding:5px 10px;border-bottom:1px solid #dee2e6;color:#555;">Route Card Description</th>';
+                        html += '</tr></thead><tbody>';
+                        entries.forEach(e => {
+                            html += '<tr style="cursor:pointer;" onmouseover="this.style.background=\'#e8f0fe\'" onmouseout="this.style.background=\'\'" onclick="loadEsnxx(\'' + (e.esnxx || '').replace(/'/g, "\\'") + '\', this)">';
+                            html += '<td style="padding:4px 10px;border-bottom:1px solid #f0f0f0;">' + (e.btype || '') + '</td>';
+                            html += '<td style="padding:4px 10px;border-bottom:1px solid #f0f0f0;">' + (e.esnxx || '') + '</td>';
+                            html += '<td style="padding:4px 10px;border-bottom:1px solid #f0f0f0;">' + (e.name || '') + '</td>';
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table></div>';
+                        area.innerHTML = html;
+                        document.getElementById('esnxxPanel').innerHTML = '';
+                    }
+                }
+            } catch {}
         });
+
+        async function loadEsnxx(esnxxId, rowEl) {
+            // highlight selected row
+            document.querySelectorAll('#btypeArea tr[style*="cursor"]').forEach(r => r.style.background = '');
+            if (rowEl) rowEl.style.background = '#e8f0fe';
+
+            const panel = document.getElementById('esnxxPanel');
+            panel.innerHTML = '<div class="card"><div class="card-body p-3"><div style="color:#aaa;font-size:.85rem;">Loading...</div></div></div>';
+
+            try {
+                const resp = await fetch('/api/data/esnxx/' + encodeURIComponent(esnxxId));
+                if (!resp.ok) throw new Error();
+                const entries = await resp.json();
+
+                if (entries.length === 0) {
+                    panel.innerHTML = '<div class="card"><div class="card-body p-3"><div style="color:#aaa;font-size:.85rem;">No ESNXX data</div></div></div>';
+                } else {
+                    let html = '<div class="card"><div class="card-body p-3">';
+                    html += '<div style="font-size:.82rem;color:#888;margin-bottom:6px;">ESNXX: <strong style="color:#333;">' + esnxxId + '</strong></div>';
+                    entries.forEach(e => {
+                        if (e.name) html += '<div style="font-size:.82rem;margin-bottom:4px;">' + e.name + '</div>';
+                        if (e.lines && e.lines.length > 0) {
+                            html += '<div style="max-height:200px;overflow-y:auto;border:1px solid #e9ecef;border-radius:6px;min-width:220px;">';
+                            html += '<table style="width:100%;font-size:.8rem;border-collapse:collapse;">';
+                            e.lines.forEach(ln => {
+                                html += '<tr><td style="padding:3px 10px;border-bottom:1px solid #f0f0f0;">' + ln + '</td></tr>';
+                            });
+                            html += '</table></div>';
+                        }
+                    });
+                    html += '</div></div>';
+                    panel.innerHTML = html;
+                }
+            } catch {
+                panel.innerHTML = '<div class="card"><div class="card-body p-3"><div style="color:#c00;font-size:.85rem;">Error</div></div></div>';
+            }
+        }
+
+        loadLines();
     </script>
 </body>
 </html>
