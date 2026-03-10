@@ -37,6 +37,32 @@ app.MapGet("/api/data/btype/{plineId}", (string plineId, AdsService ads) =>
     }
 });
 
+app.MapGet("/api/data/expqty/{bType}", (string bType, AdsService ads) =>
+{
+    try
+    {
+        var entries = ads.GetExpqtyEntries(bType);
+        return Results.Ok(entries);
+    }
+    catch
+    {
+        return Results.Problem("Failed to load data", statusCode: 500);
+    }
+});
+
+app.MapGet("/api/data/thqty/{bType}/{plineId}", (string bType, string plineId, AdsService ads) =>
+{
+    try
+    {
+        var entries = ads.GetThqtyEntries(bType, plineId);
+        return Results.Ok(entries);
+    }
+    catch
+    {
+        return Results.Problem("Failed to load data", statusCode: 500);
+    }
+});
+
 app.MapGet("/api/data/esnxx/{esnxxId}", (string esnxxId, AdsService ads) =>
 {
     try
@@ -71,7 +97,7 @@ try
     var chrome = chromePaths.FirstOrDefault(File.Exists);
     if (chrome != null)
     {
-        System.Diagnostics.Process.Start(chrome, "--app=http://127.0.0.1:5050 --window-size=520,700 --window-position=50,50");
+        System.Diagnostics.Process.Start(chrome, "--app=http://127.0.0.1:5050 --window-size=1400,750 --window-position=50,50");
     }
     else
     {
