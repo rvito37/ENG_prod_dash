@@ -2,17 +2,19 @@
 planStatus:
   planId: plan-ads-dashboard
   title: Дашборд данных ADS
-  status: draft
+  status: in-progress
   planType: feature
   priority: medium
   owner: AVXUser
   stakeholders: []
-  tags: [dashboard, ads, advantage-database]
+  tags:
+    - dashboard
+    - ads
+    - advantage-database
   created: "2026-03-10"
-  updated: "2026-03-10T00:00:00.000Z"
-  progress: 0
+  updated: "2026-03-11T00:00:00.000Z"
+  progress: 70
 ---
-
 # Дашборд данных из Advantage Database Server
 
 ## Цель
@@ -21,92 +23,91 @@ planStatus:
 
 **Важное требование:** конечный пользователь видит ТОЛЬКО данные. Никаких путей к файлам, названий таблиц, API-эндпоинтов, скриптов — ничего технического.
 
-## Стек технологий (максимально простой + красивый UI)
+## Стек технологий
 
-**C# ASP.NET Minimal API + встроенная HTML-страница**
-
-- **Бэкенд:** .NET 8, x86, ASP.NET Minimal API (Kestrel)
-- **Фронтенд:** одна HTML-страница с Bootstrap 5 + DataTables.js (подключаются через CDN)
-- **Доступ к ADS:** NuGet пакет `Advantage.Data.Provider` + нативные DLL
+- **Бэкенд:** C# .NET 8, x86, ASP.NET Minimal API (Kestrel)
+- **Фронтенд:** одна HTML-страница с Bootstrap 5 + vanilla JS
+- **Доступ к ADS:** NuGet `Advantage.Data.Provider` v8.10.1.2
 - **Деплой:** self-contained publish → папка с EXE, скопировал и запустил
-- **Конфиг:** `appsettings.json` — путь к данным (легко поменять на корп. машине)
-- **Обновление данных:** по кнопке
+- **Браузер:** Chrome в --app режиме (1400x750, без адресной строки)
 
-## Безопасность / скрытие технических деталей
+## Подключение к ADS
 
-Пользователь НЕ должен видеть:
-- Пути к DBF-файлам и директории данных
-- Названия таблиц в URL или на странице
-- SQL-запросы или структуру API
-- Исходный код, скрипты, connection strings
-- Сообщения об ошибках с техническими деталями
-
-Как это реализуем:
-- **API без имён таблиц в URL** — вместо `GET /api/table/c_pline` делаем `GET /api/data/pline` (абстрактные алиасы, зашитые в бэкенде)
-- **Слушаем только localhost** — Kestrel биндится на `127.0.0.1`, снаружи не доступен
-- **Нет directory browsing** — отключена раздача файлов кроме index.html
-- **Ошибки без деталей** — при ошибке ADS возвращаем просто "Ошибка загрузки данных", без стека и SQL
-- **Заголовки в таблице** — человекочитаемые названия колонок вместо технических (маппинг на бэкенде)
-- **HTML без подсказок** — в исходном коде страницы нет путей, имён таблиц, комментариев с технической информацией
-- **appsettings.json** — конфиг рядом с EXE, но содержит только путь к данным (не критично, пользователь всё равно не полезет в папку EXE)
-
-## Подключение к ADS (изучено из PDC-harbour-WINGUI)
-
-Строка подключения:
+### LOCAL режим (для разработки)
 ```
-Data Source={путь_к_данным};ServerType=LOCAL;TableType=CDX;LockMode=COMPATIBLE;CharType=OEM;TrimTrailingSpaces=TRUE;
+Data Source={путь};ServerType=ADS_LOCAL_SERVER;TableType=ADS_CDX;CharType=OEM;TrimTrailingSpaces=TRUE;
+```
+- DataPath: `C:\Users\AVXUser\BMS\DATA`
+- Нативные DLL: ace32.dll, adsloc32.dll, axcws32.dll + adslocal.cfg, ansi.chr, extend.chr
+- Копируются из `C:\Users\AVXUser\PDC-harbour-WINGUI\PdcGui\ADS`
+
+### REMOTE режим (корпоративная машина) ✅ Работает
+```
+Data Source=\\10.10.48.20\bms\avxbms;ServerType=ADS_REMOTE_SERVER;TableType=ADS_CDX;CharType=OEM;TrimTrailingSpaces=TRUE;
+```
+- DataPath: `\\10.10.48.20\bms\avxbms` (UNC путь, НЕ маппированный диск G:)
+- **Без LockMode** — LockMode=COMPATIBLE вызывает Error 7028 на REMOTE
+- Настройки в `appsettings.json`:
+```json
+{
+  "DataPath": "\\\\10.10.48.20\\bms\\avxbms",
+  "ServerType": "REMOTE"
+}
 ```
 
-- Нативные DLL: `ace32.dll`, `adsloc32.dll`, `axcws32.dll` + `adslocal.cfg`, `ansi.chr`, `extend.chr`
-- Откуда копируем: `C:\Users\AVXUser\PDC-harbour-WINGUI\PdcGui\ADS\`
-- Платформа: **только x86** (32-битные нативные DLL)
-- Запасной вариант: NuGet `DbfDataReader` для таблиц с ошибкой CDX Error 3010
+### Деплой на корпоративную машину
+1. `dotnet publish -c Release -r win-x86 --self-contained -o ../dash_line_publish`
+2. Скопировать папку dash_line_publish на корп. машину
+3. Заменить ace32.dll на системный из `C:\Program Files (x86)\Advantage 11.10\ado.net\Redistribute\`
+4. Удалить из папки: adsloc32.dll, axcws32.dll, adslocal.cfg
+5. Отредактировать appsettings.json (DataPath + ServerType=REMOTE)
+6. Запустить DashLine.exe
 
-## Данные
+### Ошибки и решения
+| Ошибка | Причина | Решение |
+|--------|---------|---------|
+| Error 5185 "Local server restricted" | Бандлированный ace32.dll поддерживает только LOCAL | Заменить на системный ace32.dll от Advantage 11.10 |
+| Error 7028 "Invalid open mode" | LockMode=COMPATIBLE несовместим с REMOTE | Убрать LockMode из connection string |
+| Error 3010 на WHERE по c_btype | CDX index keys с алиасом таблицы | SELECT * без WHERE, кэш в памяти, фильтр в C# |
 
-### Первая таблица: `C_PLINE.DBF`
+## Таблицы и данные
 
-Расположение (для тестов): `C:\Users\AVXUser\BMS\DATA\C_PLINE.DBF`
+### c_pline.dbf — Производственные линии
+- Поля: pline_id, pline_nm, pline_pic, ptype_id, size_id, HVal_DT, LVal_DT
+- Combo: `PTYPE_ID | PLINE_ID — PLINE_NM [SIZE_ID]` отсортировано по PTYPE+PLINE
+- В toolbar: DT Range (HVAL/LVAL) и Format (PLINE_PIC)
 
-Известные поля (из анализа исходников Harbour):
-- `pline_id` — ID производственной линии (C, 3)
-- `pline_nm` — название линии
-- `pline_pic` — формат/картинка линии
-- `ptype_id` — ID типа продукта
-- `size_id` — ID размера
-- `HVal_DT` — верхний порог даты
-- `LVal_DT` — нижний порог даты
-- `h_poly` — верхний лимит poly
-- `l_poly` — нижний лимит poly
+### c_btype.dbf — Route Card Description
+- Поля: pline_id, esnxx_id, b_type, BTYPE_NME
+- Кэш всех 675 строк в памяти, фильтр по pline_id в C#
+- Таблица: B_TYPE, ESNXX, Route Card Description (max-width 420px)
+- Клик по строке → загрузка ESNXX + EXPQTY + THQTY
 
-> Полный список колонок будет прочитан динамически из DBF-заголовка при запуске.
+### c_esnxx.dbf — ESNXX описания
+- Поля: ESNXX_ID, ESNXX_NM, ESNXXTL1-ESNXXTL7
+- Панель справа: имя + строки описания (TL1-TL7)
 
-### Маппинг колонок (технические → человекочитаемые)
+### c_expqty.dbf — Expected Qty
+- Поля: B_TYPE, SIZE_ID, LVAL_LIM, HVAL_LIM, TOL_ID, UOM_ID, EXP_YLD
+- Фильтр по B_TYPE, сортировка по SIZE_ID + UOM_ID
+- Панель справа от ESNXX
 
-Будет задан на бэкенде. Пример:
-- `pline_id` → "Line ID"
-- `pline_nm` → "Line Name"
-- `ptype_id` → "Product Type"
-- и т.д.
-
-Колонки без маппинга — скрываются или показываются с заглавной буквы без подчёркиваний.
-
-### Путь к данным
-
-- Для разработки/тестов: `C:\Users\AVXUser\BMS\DATA\`
-- На корп. машине: другой путь (меняется в `appsettings.json`)
+### c_thqty.dbf — Threshold Qty
+- Поля: B_TYPE, PLINE_ID, SIZE_ID, ORIG_UOM, CONV_UOM, TH_QTY, L_VAL, H_VAL
+- Фильтр по B_TYPE + PLINE_ID, сортировка по SIZE_ID + ORIG_UOM
+- Панель справа от EXPQTY
 
 ## Структура проекта
 
 ```
 dash_line/
 ├── DashLine.csproj          # .NET 8, x86, self-contained
-├── Program.cs               # Minimal API: статика + API-эндпоинты
-├── AdsService.cs            # Подключение к ADS и запросы к таблицам
-├── appsettings.json         # Конфиг: путь к данным, порт
+├── Program.cs               # Minimal API + Chrome app-mode запуск
+├── AdsService.cs            # ADS подключение, кэширование, фильтрация
+├── appsettings.json         # DataPath, ServerType
 ├── wwwroot/
-│   └── index.html           # UI дашборда (Bootstrap 5 + DataTables.js)
-├── ADS/                     # Нативные DLL от ADS (копируются из PDC)
+│   └── index.html           # UI дашборда (Bootstrap 5 + vanilla JS)
+├── ADS/                     # Нативные DLL (только для LOCAL)
 │   ├── ace32.dll
 │   ├── adsloc32.dll
 │   ├── axcws32.dll
@@ -117,44 +118,18 @@ dash_line/
     └── ads-dashboard.md
 ```
 
-## Шаги реализации
+## API эндпоинты
 
-### Шаг 1: Создание проекта
-- Создать .NET 8 проект (`dotnet new web`), платформа x86
-- Добавить NuGet: `Advantage.Data.Provider` v8.10.1.2
-- Скопировать нативные DLL из `C:\Users\AVXUser\PDC-harbour-WINGUI\PdcGui\ADS\`
-- Прописать в .csproj копирование DLL в выходную директорию
-
-### Шаг 2: Бэкенд — `AdsService.cs`
-- Строит connection string из пути в `appsettings.json`
-- Метод: `ReadTable(tableName)` → возвращает данные таблицы
-- Маппинг технических имён колонок → человекочитаемые заголовки
-- Обработка ошибок: логируем детали в консоль, наружу — только "Ошибка загрузки данных"
-
-### Шаг 3: Бэкенд — `Program.cs`
-- Minimal API + раздача статических файлов (только index.html)
-- `GET /api/data/pline` → JSON-массив строк (абстрактный эндпоинт без имени таблицы)
-- Слушает только `http://127.0.0.1:5050` (не доступен снаружи)
-- При запуске: проверяет доступность ADS, открывает браузер
-- Отключены: directory browsing, подробные ошибки, серверные заголовки
-
-### Шаг 4: Фронтенд — `wwwroot/index.html`
-- Bootstrap 5 — красивая разметка и стили (CDN)
-- DataTables.js — сортировка, поиск, пагинация таблицы (CDN)
-- При загрузке: запрос `/api/data/pline` → заполнение таблицы
-- Кнопка "Обновить" → повторный запрос и перезагрузка таблицы
-- Спиннер загрузки пока данные грузятся
-- **Никаких технических деталей** — заголовок просто "Production Lines" или аналогичный
-- При ошибке — дружелюбное сообщение "Не удалось загрузить данные"
-
-### Шаг 5: Тестирование и деплой
-- `dotnet run` — локальный тест с данными из `C:\Users\AVXUser\BMS\DATA\`
-- `dotnet publish -c Release -r win-x86 --self-contained` — сборка для деплоя
-- Результат: папка с EXE, запустил — браузер открылся автоматически
+| Метод | URL | Описание |
+|-------|-----|----------|
+| GET | /api/data/pline | Все производственные линии |
+| GET | /api/data/btype/{plineId} | Route card entries по pline |
+| GET | /api/data/esnxx/{esnxxId} | ESNXX описание |
+| GET | /api/data/expqty/{bType} | Expected qty по B_TYPE |
+| GET | /api/data/thqty/{bType}/{plineId} | Threshold qty по B_TYPE + PLINE |
 
 ## Будущие доработки
 
-- Добавить другие таблицы/представления по запросу
+- Добавить другие таблицы по запросу
 - Графики/диаграммы для числовых данных
 - Фильтры по дате и другим полям
-- Несколько вкладок/страниц дашборда
