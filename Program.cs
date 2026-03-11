@@ -76,6 +76,50 @@ app.MapGet("/api/data/esnxx/{esnxxId}", (string esnxxId, AdsService ads) =>
     }
 });
 
+app.MapGet("/api/data/dline/{ptypeId}/{plineId}", (string ptypeId, string plineId, AdsService ads) =>
+{
+    try
+    {
+        var entries = ads.GetDlineEntries(ptypeId, plineId);
+        return Results.Ok(entries);
+    }
+    catch
+    {
+        return Results.Problem("Failed to load data", statusCode: 500);
+    }
+});
+
+app.MapGet("/api/debug/dline-structure", (AdsService ads) =>
+{
+    try
+    {
+        using var conn = new Advantage.Data.Provider.AdsConnection(ads.GetDebugConnectionString());
+        conn.Open();
+        using var cmd = new Advantage.Data.Provider.AdsCommand("SELECT TOP 1 * FROM \"D_LINE.DBF\"", conn);
+        using var reader = cmd.ExecuteReader();
+        var columns = new List<string>();
+        for (int i = 0; i < reader.FieldCount; i++)
+            columns.Add(reader.GetName(i));
+        var sample = new List<Dictionary<string, object?>>();
+        if (reader.Read())
+        {
+            var row = new Dictionary<string, object?>();
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                var val = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                if (val is string s) val = s.TrimEnd();
+                row[columns[i]] = val;
+            }
+            sample.Add(row);
+        }
+        return Results.Ok(new { columns, sample });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, detail = ex.InnerException?.Message });
+    }
+});
+
 try { Console.Clear(); } catch { }
 var config = app.Services.GetRequiredService<IConfiguration>();
 Console.WriteLine("DataPath: " + (config["DataPath"] ?? "(default)"));

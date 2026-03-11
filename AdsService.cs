@@ -228,6 +228,49 @@ public class AdsService
             .ToList();
     }
 
+    public List<object> GetDlineEntries(string ptypeId, string plineId)
+    {
+        var results = new List<object>();
+        try
+        {
+            using var conn = new AdsConnection(GetConnectionString());
+            conn.Open();
+
+            using var cmd = new AdsCommand(
+                "SELECT B_PURP, B_ID, ESN_ID, B_STAT, B_PRIOR, B_DPROM, CP_BQTYP, CP_BQTYS, CP_BQTYW, CPPROC_ID, CP_PCCODE " +
+                "FROM \"D_LINE.DBF\" " +
+                "WHERE PTYPE_ID = :ptype AND PLINE_ID = :pline AND B_STAT NOT IN ('C','D')", conn);
+            cmd.Parameters.Add(":ptype", ptypeId);
+            cmd.Parameters.Add(":pline", plineId);
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                results.Add(new
+                {
+                    purp = reader.IsDBNull(0) ? "" : reader.GetValue(0).ToString()!.TrimEnd(),
+                    batchId = reader.IsDBNull(1) ? "" : reader.GetValue(1).ToString()!.TrimEnd(),
+                    esn = reader.IsDBNull(2) ? "" : reader.GetValue(2).ToString()!.TrimEnd(),
+                    stat = reader.IsDBNull(3) ? "" : reader.GetValue(3).ToString()!.TrimEnd(),
+                    prior = reader.IsDBNull(4) ? "" : reader.GetValue(4).ToString()!.TrimEnd(),
+                    promised = reader.IsDBNull(5) ? "" : reader.GetValue(5)?.ToString() ?? "",
+                    qtyP = reader.IsDBNull(6) ? 0 : Convert.ToInt32(reader.GetValue(6)),
+                    qtyS = reader.IsDBNull(7) ? 0 : Convert.ToInt32(reader.GetValue(7)),
+                    qtyW = reader.IsDBNull(8) ? 0 : Convert.ToInt32(reader.GetValue(8)),
+                    proc = reader.IsDBNull(9) ? "" : reader.GetValue(9).ToString()!.TrimEnd(),
+                    pccode = reader.IsDBNull(10) ? "" : reader.GetValue(10).ToString()!.TrimEnd()
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reading d_line");
+        }
+        return results;
+    }
+
+    public string GetDebugConnectionString() => GetConnectionString();
+
     public string GetDebugConnectionInfo()
     {
         return $"ServerType={_serverType}, DataPath={_dataPath}";
