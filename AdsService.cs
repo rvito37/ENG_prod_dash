@@ -269,6 +269,63 @@ public class AdsService
         return results;
     }
 
+    private List<(string ptypeId, string plineId, string procId, double leadtDays)>? _leadtCache;
+
+    private void LoadLeadtCache()
+    {
+        _leadtCache = new();
+        try
+        {
+            using var conn = new AdsConnection(GetConnectionString("CDX"));
+            conn.Open();
+            using var cmd = new AdsCommand("SELECT PTYPE_ID, PLINE_ID, PROC_ID, LEADT_DAYS FROM \"c_leadt.DBF\"", conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var pt = reader.IsDBNull(0) ? "" : reader.GetValue(0).ToString()!.TrimEnd();
+                var pl = reader.IsDBNull(1) ? "" : reader.GetValue(1).ToString()!.TrimEnd();
+                var pr = reader.IsDBNull(2) ? "" : reader.GetValue(2).ToString()!.TrimEnd();
+                var ld = reader.IsDBNull(3) ? 0.0 : Convert.ToDouble(reader.GetValue(3));
+                _leadtCache.Add((pt, pl, pr, ld));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading c_leadt cache");
+        }
+    }
+
+    public List<object> GetLeadtEntries(string plineId)
+    {
+        if (_leadtCache == null) LoadLeadtCache();
+        return _leadtCache!
+            .Where(x => x.plineId.Equals(plineId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.procId)
+            .Select(x => (object)new { ptypeId = x.ptypeId, plineId = x.plineId, procId = x.procId, leadtDays = x.leadtDays })
+            .ToList();
+    }
+
+    public List<string> ListTables()
+    {
+        var tables = new List<string>();
+        try
+        {
+            var dir = new DirectoryInfo(_dataPath);
+            foreach (var f in dir.GetFiles("*.DBF", SearchOption.TopDirectoryOnly).Union(dir.GetFiles("*.dbf", SearchOption.TopDirectoryOnly)))
+            {
+                var name = Path.GetFileNameWithoutExtension(f.Name).ToUpper();
+                if (!tables.Contains(name))
+                    tables.Add(name);
+            }
+            tables.Sort();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing tables");
+        }
+        return tables;
+    }
+
     public string GetDebugConnectionString() => GetConnectionString();
 
     public string GetDebugConnectionInfo()

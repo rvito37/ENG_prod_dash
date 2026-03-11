@@ -89,6 +89,43 @@ app.MapGet("/api/data/dline/{ptypeId}/{plineId}", (string ptypeId, string plineI
     }
 });
 
+app.MapGet("/api/data/leadt/{plineId}", (string plineId, AdsService ads) =>
+{
+    try
+    {
+        return Results.Ok(ads.GetLeadtEntries(plineId));
+    }
+    catch
+    {
+        return Results.Problem("Failed to load data", statusCode: 500);
+    }
+});
+
+app.MapGet("/api/tables", (AdsService ads) =>
+{
+    try
+    {
+        return Results.Ok(ads.ListTables());
+    }
+    catch
+    {
+        return Results.Problem("Failed to list tables", statusCode: 500);
+    }
+});
+
+app.MapGet("/api/table/{name}", (string name, AdsService ads) =>
+{
+    try
+    {
+        var (columns, rows) = ads.ReadTable(name);
+        return Results.Ok(new { columns, rows });
+    }
+    catch
+    {
+        return Results.Problem("Failed to read table", statusCode: 500);
+    }
+});
+
 app.MapGet("/api/debug/dline-structure", (AdsService ads) =>
 {
     try
