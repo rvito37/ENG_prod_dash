@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="Advantage.Data.Provider" Version="8.10.1.2" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.3" />
   </ItemGroup>
 
   <!-- ADS native DLLs -->

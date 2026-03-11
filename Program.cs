@@ -77,7 +77,11 @@ app.MapGet("/api/data/esnxx/{esnxxId}", (string esnxxId, AdsService ads) =>
 });
 
 try { Console.Clear(); } catch { }
+var config = app.Services.GetRequiredService<IConfiguration>();
+Console.WriteLine("DataPath: " + (config["DataPath"] ?? "(default)"));
+Console.WriteLine("ServerType: " + (config["ServerType"] ?? "(default=LOCAL)"));
 var adsService = app.Services.GetRequiredService<AdsService>();
+Console.WriteLine("Connection: " + adsService.GetDebugConnectionInfo());
 if (adsService.TestConnection())
     Console.WriteLine("Dashboard is ready. Browser will open automatically.");
 else

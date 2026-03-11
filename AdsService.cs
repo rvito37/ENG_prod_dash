@@ -6,17 +6,20 @@ namespace DashLine;
 public class AdsService
 {
     private readonly string _dataPath;
+    private readonly string _serverType;
     private readonly ILogger<AdsService> _logger;
 
     public AdsService(IConfiguration config, ILogger<AdsService> logger)
     {
         _dataPath = config["DataPath"] ?? @"C:\Users\AVXUser\BMS\DATA";
+        _serverType = config["ServerType"] ?? "LOCAL";
         _logger = logger;
     }
 
     private string GetConnectionString(string tableType = "CDX")
     {
-        return $"Data Source={_dataPath};ServerType=LOCAL;TableType={tableType};LockMode=COMPATIBLE;CharType=OEM;TrimTrailingSpaces=TRUE;";
+        var st = _serverType.Equals("REMOTE", StringComparison.OrdinalIgnoreCase) ? "ADS_REMOTE_SERVER" : "ADS_LOCAL_SERVER";
+        return $"Data Source={_dataPath};ServerType={st};TableType=ADS_CDX;CharType=OEM;TrimTrailingSpaces=TRUE;";
     }
 
     public (List<string> columns, List<List<object?>> rows) ReadTable(string tableName)
@@ -223,6 +226,11 @@ public class AdsService
             .ThenBy(x => x.origUom)
             .Select(x => (object)new { sizeId = x.sizeId, origAmt = x.origAmt, origUom = x.origUom, convUom = x.convUom, thQty = x.thQty, ydQty = x.ydQty, lVal = x.lVal, hVal = x.hVal })
             .ToList();
+    }
+
+    public string GetDebugConnectionInfo()
+    {
+        return $"ServerType={_serverType}, DataPath={_dataPath}";
     }
 
     public bool TestConnection()
